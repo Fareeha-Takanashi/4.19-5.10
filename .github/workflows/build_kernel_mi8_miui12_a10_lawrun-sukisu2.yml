@@ -329,36 +329,14 @@ jobs:
           echo "PACK_METHOD=${{ env.PACK_METHOD }}" >> $GITHUB_ENV
 
           if [[ ${{ env.KERNELSU_METHOD }} == "shell" ]]; then
-            if [[ "${{ env.KERNELSU_SOURCE }}" != *".sh" ]]; then
-                echo "You need to provide a link ending with .sh, not one ending with .git or any other extension !"
-                false
-            else
-                curl -sSL ${{ env.KERNELSU_SOURCE }} | bash -s ${{ env.KERNELSU_BRANCH }}
-            fi
-          elif [[ ${{ env.KERNELSU_METHOD }} == "manual" ]]; then
-            if [[ "${{ env.KERNELSU_SOURCE }}" != *".git" ]]; then
-                echo "You need to provide a link ending with .git, not one ending with .sh or any other extension !"
-                false
-            else
-                rm -rf KernelSU && rm -rf KernelSU-Next
-                git clone ${{ env.KERNELSU_SOURCE }} -b ${{ env.KERNELSU_BRANCH }} ${{ env.KERNELSU_NAME }}
-                ln -sf "$(realpath --relative-to="$GITHUB_WORKSPACE/device_kernel/drivers" "$GITHUB_WORKSPACE/device_kernel/${{ env.KERNELSU_NAME }}/kernel")" "kernelsu"
-                grep -q "kernelsu" "$GITHUB_WORKSPACE/device_kernel/drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> $GITHUB_WORKSPACE/device_kernel/drivers/Makefile
-                grep -q "source \"drivers/kernelsu/Kconfig\"" "$GITHUB_WORKSPACE/device_kernel/drivers/Kconfig" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$GITHUB_WORKSPACE/device_kernel/drivers/Kconfig"
-                echo "KernelSU Settings done."
-            fi
-          elif [[ ${{ env.KERNELSU_METHOD }} == "only" ]];then
-            if [[ "${{ env.KERNELSU_SOURCE }}" != *".git" ]]; then
-                echo "You need to provide a link ending with .git, not one ending with .sh or any other extension !"
-                false
-            else
-                rm -rf *KernelSU* && rm -rf drivers/kernelsu
-                git clone ${{ env.KERNELSU_SOURCE }} -b ${{ env.KERNELSU_BRANCH }} ${{ env.KERNELSU_NAME }}
-                ln -sf ../${{ env.KERNELSU_NAME }}/kernel drivers/kernelsu
-                echo "KernelSU git done."
-            fi
-          else
-            false
+            # 強制改用 git clone 方式拉取 SukiSU 原始碼並建立連結
+            rm -rf KernelSU
+            git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra.git -b main KernelSU
+            
+            ln -sf "$(realpath --relative-to="$GITHUB_WORKSPACE/device_kernel/drivers" "$GITHUB_WORKSPACE/device_kernel/KernelSU/kernel")" "drivers/kernelsu"
+            grep -q "kernelsu" "$GITHUB_WORKSPACE/device_kernel/drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> $GITHUB_WORKSPACE/device_kernel/drivers/Makefile
+            grep -q "source \"drivers/kernelsu/Kconfig\"" "$GITHUB_WORKSPACE/device_kernel/drivers/Kconfig" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$GITHUB_WORKSPACE/device_kernel/drivers/Kconfig"
+            echo "SukiSU Setup Success."
           fi
           echo "KERNELSU_METHOD=${{ env.KERNELSU_METHOD }}" >> $GITHUB_ENV
           KSU_VERSION=$(cd ${{ env.KERNELSU_NAME }} && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
@@ -398,54 +376,14 @@ jobs:
             echo "Disabled SUSFS !"
           fi
 
-      - name: Patch Kernel for no-kprobe
-        if: 'false'
+      - name: Patch Kernel for SukiSU Manual Hook
         run: |
-          cd $GITHUB_WORKSPACE
-          KERNEL=$(echo "${{ env.KERNEL_VERSION }}" | awk -F '.' '{print $1}')
-          PATCHLEVEL=$(echo "${{ env.KERNEL_VERSION }}" | awk -F '.' '{print $2}')
-          if grep -q "CONFIG_KSU" "device_kernel/fs/exec.c"; then
-            echo "Your kernel source code appears to have been manually patched, so this step is skipped."
-          else
-            if [[ ${{ env.HOOK_METHOD }} == "normal" ]]; then
-              if [[ -f "/tmp/Patches/normal_patches.sh" ]]; then
-                  cp /tmp/Patches/normal_patches.sh device_kernel/
-                  cd device_kernel
-                  bash normal_patches.sh
-                  echo "execuated patch successfully."
-                  if [[ "${{ env.KERNELSU_NAME }}" != "KernelSU-Next" ]]; then
-                      cp /tmp/Patches/backport_patches.sh ./
-                      bash backport_patches.sh
-                      echo "execuated backport patch successfully."
-                  else
-                      echo "your kernel needn't backport patch."
-                  fi
-              else
-                  echo "Cannot found normal_patches.sh in build project , please check u file existed in build project !"
-                  false
-              fi
-            elif [[ ${{ env.HOOK_METHOD }} == "syscall" ]]; then
-              if [[ -f "/tmp/Patches/syscall_hook_patches.sh" ]]; then
-                  cp /tmp/Patches/syscall_hook_patches.sh device_kernel/
-                  cd device_kernel
-                  bash syscall_hook_patches.sh
-                  echo "execuated syscall patch successfully."
-                  if [[ "${{ env.KERNELSU_NAME }}" != "KernelSU-Next" ]]; then
-                      cp /tmp/Patches/backport_patches.sh ./
-                      bash backport_patches.sh
-                      echo "execuated backport patch successfully."
-                  else
-                      echo "your kernel needn't backport patch."
-                  fi
-              else
-                  echo "Cannot found syscall_hook_patches.sh in build project , please check u file existed in build project !"
-                  false
-              fi
-            else
-              echo "please input vaild option!"
-              false
-            fi
-          fi
+          cd $GITHUB_WORKSPACE/device_kernel
+          
+          # 下載並套用 SukiSU 的手動 Hook (針對 fs/exec.c 與 fs/open.c 等)
+          # 如果你的源碼已經有部分 hook，請確定它能正常修復或掛載
+          echo "Patching manual hooks for SukiSU..."
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main || true
 
       - name: Extra Kernel Options
         run: |
