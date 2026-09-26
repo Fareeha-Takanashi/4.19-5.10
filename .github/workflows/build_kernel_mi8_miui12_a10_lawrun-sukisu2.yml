@@ -335,15 +335,8 @@ jobs:
             # 清理舊的 KernelSU 資料夾與連結
             rm -rf KernelSU drivers/kernelsu
             
-            # 拉取 SukiSU-Ultra 原始碼
-            git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra.git KernelSU
-            
-            # 修正：正確連結 KernelSU/kernel 至 drivers/kernelsu
-            ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
-            
-            # 確保 Makefile 與 Kconfig 正確引用
-            grep -q "kernelsu" drivers/Makefile || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> drivers/Makefile
-            grep -q "source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
+            # 使用官方 setup.sh 拉取 SukiSU-Ultra main 分支
+            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
             
             echo "SukiSU Setup Success."
           fi
@@ -388,11 +381,13 @@ jobs:
       - name: Patch Kernel for SukiSU Manual Hook
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
+          echo "Patching manual hooks for Non-GKI kernel..."
           
-          # 下載並套用 SukiSU 的手動 Hook (針對 fs/exec.c 與 fs/open.c 等)
-          # 如果你的源碼已經有部分 hook，請確定它能正常修復或掛載
-          echo "Patching manual hooks for SukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin || true
+          # 請確認你的 Patches 資料夾或 NonGKI_Kernel_Patches 中有針對 4.9 核心的 manual hook 補丁
+          # 範例：如果原先 KSU 可用的 hook 補丁放在 /tmp/Patches/ 或倉庫中：
+          if [ -f "/tmp/Patches/manual_hook_4.9.patch" ]; then
+            patch -p1 < /tmp/Patches/manual_hook_4.9.patch || true
+          fi
 
       - name: Extra Kernel Options
         run: |
