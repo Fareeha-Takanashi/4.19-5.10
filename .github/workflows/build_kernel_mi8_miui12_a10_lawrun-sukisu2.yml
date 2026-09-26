@@ -335,11 +335,11 @@ jobs:
             # 清理舊的 KernelSU 資料夾與連結
             rm -rf KernelSU drivers/kernelsu
             
-            # 直接拉取 SukiSU-Ultra
+            # 拉取 SukiSU-Ultra 原始碼
             git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra.git KernelSU
             
-            # 正確連結 ksu 目錄至 drivers/kernelsu
-            ln -sf $(pwd)/KernelSU/ksu drivers/kernelsu
+            # 修正：正確連結 KernelSU/kernel 至 drivers/kernelsu
+            ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
             
             # 確保 Makefile 與 Kconfig 正確引用
             grep -q "kernelsu" drivers/Makefile || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> drivers/Makefile
@@ -392,7 +392,7 @@ jobs:
           # 下載並套用 SukiSU 的手動 Hook (針對 fs/exec.c 與 fs/open.c 等)
           # 如果你的源碼已經有部分 hook，請確定它能正常修復或掛載
           echo "Patching manual hooks for SukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main || true
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin || true
 
       - name: Extra Kernel Options
         run: |
