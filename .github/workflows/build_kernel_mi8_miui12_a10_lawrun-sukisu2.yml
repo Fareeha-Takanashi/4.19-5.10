@@ -1,4 +1,4 @@
-name: Build Kernel Xiaomi 8 (Lawrun MIUI12 A10) with KSU
+name: Build Kernel Mi8 (Lawrun MIUI12 A10) with sukisu
 on:
   workflow_call:
   workflow_dispatch:
@@ -330,12 +330,21 @@ jobs:
 
           if [[ ${{ env.KERNELSU_METHOD }} == "shell" ]]; then
             # 強制改用 git clone 方式拉取 SukiSU 原始碼並建立連結
-            rm -rf KernelSU
-            git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra.git -b main KernelSU
+            cd $GITHUB_WORKSPACE/device_kernel
             
-            ln -sf "$(realpath --relative-to="$GITHUB_WORKSPACE/device_kernel/drivers" "$GITHUB_WORKSPACE/device_kernel/KernelSU/kernel")" "drivers/kernelsu"
-            grep -q "kernelsu" "$GITHUB_WORKSPACE/device_kernel/drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> $GITHUB_WORKSPACE/device_kernel/drivers/Makefile
-            grep -q "source \"drivers/kernelsu/Kconfig\"" "$GITHUB_WORKSPACE/device_kernel/drivers/Kconfig" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$GITHUB_WORKSPACE/device_kernel/drivers/Kconfig"
+            # 清理舊的 KernelSU 資料夾與連結
+            rm -rf KernelSU drivers/kernelsu
+            
+            # 直接拉取 SukiSU-Ultra
+            git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra.git KernelSU
+            
+            # 正確連結 ksu 目錄至 drivers/kernelsu
+            ln -sf $(pwd)/KernelSU/ksu drivers/kernelsu
+            
+            # 確保 Makefile 與 Kconfig 正確引用
+            grep -q "kernelsu" drivers/Makefile || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> drivers/Makefile
+            grep -q "source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
+            
             echo "SukiSU Setup Success."
           fi
           echo "KERNELSU_METHOD=${{ env.KERNELSU_METHOD }}" >> $GITHUB_ENV
@@ -538,6 +547,12 @@ jobs:
           cd $GITHUB_WORKSPACE/device_kernel/
           if [ -z "${{ env.GCC_32 }}" ] && [ -z "${{ env.GCC_64 }}" ]; then
             make CC="ccache clang" O=out ARCH=arm64 ${{ env.CUSTOM_CMDS }} ${{ env.EXTRA_CMDS }} ${{ env.DEFCONFIG_NAME }}
+            
+            # --- 檢查 KSU 設定是否有成功寫入 .config ---
+            echo "=========================================="
+            echo "檢查 out/.config 中的 KSU 狀態："
+            grep -i "CONFIG_KSU" out/.config || echo "警告：out/.config 中完全找不到 CONFIG_KSU！"
+            
             if [[ "${{ env.BUILD_OTHER_CONFIG }}"  == "true" ]]; then
                 for FILES in "${MERGE_CONFIG_FILES[@]}"; do
                     ./scripts/kconfig/merge_config.sh -O out/ -m out/.config arch/arm64/configs/$FILES
